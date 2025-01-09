@@ -32,8 +32,14 @@ def check_and_convert_audio(input_file: str, output_file: str):
     return output_file
 
 
+def calculate_raised_voice(segment: AudioSegment, threshold: int = -20) -> bool:
+    loudness = segment.dBFS
+    return loudness > threshold
+
+
 def analyze_audio(wav_path):
     check_and_convert_audio(wav_path, wav_path)
+    full_audio = AudioSegment.from_file(wav_path, format="wav")
     with wave.open(wav_path, "rb") as wf:
         dialog = []
         source_toggle = True  # Simulates "receiver" and "transmitter"
@@ -48,8 +54,22 @@ def analyze_audio(wav_path):
                 if "text" in result and result["text"].strip():
                     source = "receiver" if source_toggle else "transmitter"
                     source_toggle = not source_toggle
-                    duration = len(result["text"].split())  # Simulated duration
-                    raised_voice = any(word.isupper() for word in result["text"].split())
+
+                    # duration calc
+                    words = result.get("result", [])
+                    if words:
+                        start_time = words[0]["start"]
+                        end_time = words[-1]["end"]
+                        duration = round(end_time - start_time)
+                    else:
+                        duration = 0
+
+                    # raised_voice calc
+                    segment_start = int(start_time * 1000)
+                    segment_end = int(end_time * 1000)
+                    audio_segment = full_audio[segment_start:segment_end]
+                    raised_voice = calculate_raised_voice(audio_segment)
+
                     gender = "male" if source_toggle else "female"
 
                     dialog.append({

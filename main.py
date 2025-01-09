@@ -22,7 +22,6 @@ async def asr_endpoint(file_url: str = Form(...)):
 
         wav_path = convert_mp3_to_wav(mp3_path)
         result = analyze_audio(wav_path)
-        print(result)
 
         # clean temp files
         os.remove(wav_path)
