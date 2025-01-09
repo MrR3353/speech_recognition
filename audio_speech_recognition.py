@@ -5,6 +5,7 @@ import wave
 
 from pydub import AudioSegment
 from vosk import Model, KaldiRecognizer
+import numpy as np
 
 
 def convert_mp3_to_wav(mp3_path):
@@ -70,7 +71,7 @@ def analyze_audio(wav_path):
                     audio_segment = full_audio[segment_start:segment_end]
                     raised_voice = calculate_raised_voice(audio_segment)
 
-                    gender = "male" if source_toggle else "female"
+                    gender = determine_gender_simple(audio_segment)
 
                     dialog.append({
                         "source": source,
@@ -85,6 +86,41 @@ def analyze_audio(wav_path):
         "dialog": dialog,
         "result_duration": durations
     }
+
+
+def determine_gender_simple(audio_segment: AudioSegment) -> str:
+    """
+    Gender determination based on signal frequency.
+    Returns:
+        str: 'male', 'female', 'unknown'.
+    """
+    if len(audio_segment) == 0:
+        return "unknown"
+
+    # convert audio to array
+    samples = np.array(audio_segment.get_array_of_samples())
+
+    if len(samples) == 0:
+        return "unknown"
+
+    # Calculating the spectrum using FFT (fast Fourier transform)
+    spectrum = np.fft.fft(samples)
+    frequencies = np.fft.fftfreq(len(spectrum), 1 / audio_segment.frame_rate)
+    if len(frequencies) == 0 or len(spectrum) == 0:
+        return "unknown"
+
+    # leave only positive frequencies
+    spectrum = np.abs(spectrum[:len(spectrum) // 2])
+    frequencies = frequencies[:len(frequencies) // 2]
+
+    # looking for the dominant frequency
+    dominant_frequency = frequencies[np.argmax(spectrum)]
+
+    # low frequency - male voice, high - female
+    if dominant_frequency < 300:
+        return "male"
+    else:
+        return "female"
 
 
 MODEL_PATH = 'vosk-model-small-ru-0.22'
