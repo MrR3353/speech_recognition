@@ -1,28 +1,39 @@
-import sys
 import os
-from vosk import Model, KaldiRecognizer
-import pyaudio
 
-# Load the Vosk model
-if not os.path.exists("model"):
-    print("Please download the model from https://alphacephei.com/vosk/models and unpack as 'model' in the current folder.")
-    sys.exit(1)
+import requests
+from fastapi import FastAPI, Form, HTTPException
+from fastapi.responses import JSONResponse
 
-model = Model("model")
-recognizer = KaldiRecognizer(model, 16000)
+from audio_speech_recognition import convert_mp3_to_wav, analyze_audio
 
-# Start audio stream
-mic = pyaudio.PyAudio()
-stream = mic.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=8000)
-stream.start_stream()
+app = FastAPI(debug=True)
 
-print("Listening...")
 
-while True:
-    data = stream.read(4000)
-    if recognizer.AcceptWaveform(data):
-        result = recognizer.Result()
+@app.post("/asr")
+async def asr_endpoint(file_url: str = Form(...)):
+    try:
+        if file_url.startswith("http"):
+            response = requests.get(file_url)
+            mp3_path = "temp.mp3"
+            with open(mp3_path, "wb") as f:
+                f.write(response.content)
+        else:
+            mp3_path = file_url
+
+        wav_path = convert_mp3_to_wav(mp3_path)
+        result = analyze_audio(wav_path)
         print(result)
-    else:
-        partial_result = recognizer.PartialResult()
-        print(partial_result)
+
+        # clean temp files
+        os.remove(wav_path)
+        if file_url.startswith("http"):
+            os.remove(mp3_path)
+
+        return JSONResponse(content=result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app=app)
